@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+    // Optimize font loading
+    optimizeCss: true,
+  },
+  // Optimize performance
+  poweredByHeader: false,
 };
 
 export default nextConfig;

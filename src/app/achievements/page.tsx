@@ -1,12 +1,14 @@
 import AppLayout from '@/components/layout/AppLayout'
 import OnboardingCheck from '@/components/layout/OnboardingCheck'
-import Dashboard from '@/components/features/Dashboard'
+import Gamification from '@/components/features/Gamification'
 
-export default function Home() {
+export default function AchievementsPage() {
   return (
     <OnboardingCheck>
       <AppLayout>
-        <Dashboard />
+        <div className="px-6">
+          <Gamification />
+        </div>
       </AppLayout>
     </OnboardingCheck>
   )
