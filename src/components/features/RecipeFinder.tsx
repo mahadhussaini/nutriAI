@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { useMealStore } from '@/store/mealStore'
-import { aiService } from '@/lib/ai'
+// Removed direct AI service import - now using API routes
 
 import { Search, Plus, Clock, Users, ChefHat, Loader2, Heart, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,11 +46,27 @@ export default function RecipeFinder() {
     setIsSearching(true)
     try {
       const dietaryPreferences = profile?.dietaryPreferences || []
-      const recipe = await aiService.generateRecipeFromIngredients(
-        ingredients,
-        dietaryPreferences,
-        servings
-      )
+
+      // Call AI recipe API route
+      const apiResponse = await fetch('/api/ai/recipe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ingredients: ingredients,
+          dietaryPreferences: dietaryPreferences,
+          servings: servings,
+        }),
+      })
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json()
+        throw new Error(errorData.error || 'Failed to generate recipe')
+      }
+
+      const data = await apiResponse.json()
+      const recipe = data.recipe
       
       setSearchResults([recipe])
     } catch (error) {

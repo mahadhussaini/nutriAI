@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { useMealStore } from '@/store/mealStore'
-import { aiService } from '@/lib/ai'
+// Removed direct AI service import - now using API routes
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -13,53 +13,9 @@ import {
   RefreshCw,
   Settings
 } from 'lucide-react'
-import { generateId, formatCalories } from '@/lib/utils'
-import type { MealPlan, DailyMeals, Meal, NutritionInfo } from '@/types'
-
-// Mock meal data for demo purposes
-const mockMeals: Meal[] = [
-  {
-    id: '1',
-    name: 'Greek Yogurt Parfait',
-    type: 'breakfast',
-    foods: [],
-    totalNutrition: { calories: 280, protein: 20, carbs: 35, fat: 8, fiber: 6, sugar: 25, sodium: 120 },
-    preparationTime: 5,
-    instructions: ['Layer yogurt with berries', 'Add granola on top', 'Drizzle with honey'],
-    image: '/meal-images/yogurt-parfait.jpg'
-  },
-  {
-    id: '2',
-    name: 'Grilled Chicken Salad',
-    type: 'lunch',
-    foods: [],
-    totalNutrition: { calories: 420, protein: 35, carbs: 20, fat: 22, fiber: 8, sugar: 12, sodium: 580 },
-    preparationTime: 20,
-    instructions: ['Grill chicken breast', 'Prepare mixed greens', 'Add vegetables and dressing'],
-    image: '/meal-images/chicken-salad.jpg'
-  },
-  {
-    id: '3',
-    name: 'Salmon with Quinoa',
-    type: 'dinner',
-    foods: [],
-    totalNutrition: { calories: 520, protein: 40, carbs: 45, fat: 18, fiber: 6, sugar: 8, sodium: 420 },
-    preparationTime: 30,
-    instructions: ['Cook quinoa', 'Season and bake salmon', 'Steam vegetables'],
-    image: '/meal-images/salmon-quinoa.jpg'
-  },
-  {
-    id: '4',
-    name: 'Apple with Almond Butter',
-    type: 'snack',
-    foods: [],
-    totalNutrition: { calories: 180, protein: 6, carbs: 20, fat: 12, fiber: 5, sugar: 15, sodium: 80 },
-    preparationTime: 2,
-    instructions: ['Slice apple', 'Serve with almond butter'],
-    image: '/meal-images/apple-almond.jpg'
-  }
-]
-
+import { formatCalories } from '@/lib/utils'
+import type { MealPlan } from '@/types'
+    
 interface MealPlanGeneratorProps {
   onPlanGenerated: (plan: MealPlan) => void
 }
@@ -99,57 +55,29 @@ export default function MealPlanGenerator({ onPlanGenerated }: MealPlanGenerator
         preferences.push(`Target ${selectedCalorieTarget} calories per day`)
       }
 
-      // Use AI service to generate meal plan
-      await aiService.generateMealPlan(
-        profile,
-        selectedDuration,
-        preferences
-      )
+      // Call AI meal plan API route
+      const apiResponse = await fetch('/api/ai/meal-plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userProfile: profile,
+          days: selectedDuration,
+          preferences: preferences,
+        }),
+      })
 
-      // Enhance the AI plan with our local data structure
-      const startDate = new Date()
-      const endDate = new Date()
-      endDate.setDate(startDate.getDate() + selectedDuration - 1)
-
-      const dailyMeals: DailyMeals[] = []
-
-      // Generate meals for each day (using mock data for demo, AI would provide real meals)
-      for (let i = 0; i < selectedDuration; i++) {
-        const currentDate = new Date(startDate)
-        currentDate.setDate(startDate.getDate() + i)
-
-        const dayMeals: DailyMeals = {
-          date: currentDate,
-          breakfast: includedMealTypes.breakfast ? mockMeals.find(m => m.type === 'breakfast') : undefined,
-          lunch: includedMealTypes.lunch ? mockMeals.find(m => m.type === 'lunch') : undefined,
-          dinner: includedMealTypes.dinner ? mockMeals.find(m => m.type === 'dinner') : undefined,
-          snacks: includedMealTypes.snack ? [mockMeals.find(m => m.type === 'snack')!] : []
-        }
-
-        dailyMeals.push(dayMeals)
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json()
+        throw new Error(errorData.error || 'Failed to generate meal plan')
       }
 
-      // Calculate target nutrition based on user profile and calorie target
-      const targetNutrition: NutritionInfo = {
-        calories: selectedCalorieTarget,
-        protein: Math.round(selectedCalorieTarget * 0.25 / 4), // 25% of calories
-        carbs: Math.round(selectedCalorieTarget * 0.45 / 4), // 45% of calories
-        fat: Math.round(selectedCalorieTarget * 0.30 / 9), // 30% of calories
-        fiber: 25,
-        sugar: Math.round(selectedCalorieTarget * 0.10 / 4), // 10% of calories
-        sodium: 2300
-      }
+      const data = await apiResponse.json()
+      const mealPlan = data.mealPlan
 
-      const mealPlan: MealPlan = {
-        id: generateId(),
-        userId: profile.id,
-        name: `AI-Generated ${selectedDuration}-Day Plan`,
-        startDate,
-        endDate,
-        meals: dailyMeals,
-        targetNutrition,
-        createdAt: new Date()
-      }
+      // Store the generated meal plan
+      setCurrentMealPlan(mealPlan)
 
       setCurrentMealPlan(mealPlan)
       onPlanGenerated(mealPlan)

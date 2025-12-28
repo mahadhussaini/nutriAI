@@ -74,22 +74,26 @@ A comprehensive nutrition and wellness application built with Next.js, Tailwind 
    ```
 
 3. **Environment Setup**
-   Create a `.env.local` file in the root directory:
-   ```env
-   # Required: AI API Configuration
-   NEXT_PUBLIC_AI_API_KEY=your_openai_api_key_here
-   NEXT_PUBLIC_AI_API_BASE=https://api.openai.com/v1
+   Copy the `.env.example` file to `.env` and fill in your API keys:
+   ```bash
+   cp .env.example .env
+   ```
 
-   # Optional: Additional APIs
-   NEXT_PUBLIC_NUTRITION_API_KEY=your_edamam_api_key_here
-   NEXT_PUBLIC_NUTRITION_API_ID=your_edamam_app_id_here
-   NEXT_PUBLIC_VISION_API_KEY=your_vision_api_key_here
+   Then edit `.env` with your actual API keys:
+   ```env
+   # Required: OpenAI API Configuration
+   OPENAI_API_KEY=your_openai_api_key_here
+
+   # Optional: Custom OpenAI API base URL (defaults to https://api.openai.com/v1)
+   # OPENAI_API_BASE_URL=https://api.openai.com/v1
    ```
 
 4. **Get OpenAI API Key**
    - Visit [OpenAI Platform](https://platform.openai.com/api-keys)
    - Create an account and generate an API key
-   - Add the key to your environment file
+   - Add the key to your `.env` file as `OPENAI_API_KEY`
+
+   **Security Note**: Never commit your `.env` file to version control. The `.env*` pattern is already included in `.gitignore`.
 
 5. **Run the development server**
    ```bash
@@ -156,6 +160,9 @@ src/
 - **Persistent Storage**: User preferences and data saved locally
 
 ### AI Integration
+- **Secure Configuration**: Environment-based API key management with validation
+- **OpenAI SDK**: Official OpenAI client for robust API interactions
+- **Error Handling**: Comprehensive error handling for API failures and configuration issues
 - **Meal Planning**: Generate personalized meal plans based on user profile
 - **Recipe Generation**: Create recipes from available ingredients
 - **Food Analysis**: Analyze food items for nutritional content
@@ -183,8 +190,33 @@ src/
 ### Vercel (Recommended)
 1. Push your code to GitHub
 2. Connect your repository to [Vercel](https://vercel.com)
-3. Add environment variables in Vercel dashboard
-4. Deploy automatically
+3. In your Vercel dashboard, go to Project Settings → Environment Variables
+4. Add the following environment variables:
+   - `OPENAI_API_KEY`: Your OpenAI API key
+   - `OPENAI_API_BASE_URL`: (Optional) Custom API base URL
+5. Deploy automatically
+
+### Other Platforms
+
+#### Netlify
+1. Connect your repository to [Netlify](https://netlify.com)
+2. Go to Site Settings → Environment Variables
+3. Add `OPENAI_API_KEY` and optionally `OPENAI_API_BASE_URL`
+4. Deploy
+
+#### Railway
+1. Connect your repository to [Railway](https://railway.app)
+2. Go to Variables in your project settings
+3. Add `OPENAI_API_KEY` and optionally `OPENAI_API_BASE_URL`
+4. Deploy
+
+#### Docker
+If deploying with Docker, set environment variables in your `docker-compose.yml` or pass them with `-e` flags:
+```yaml
+environment:
+  - OPENAI_API_KEY=your_key_here
+  - OPENAI_API_BASE_URL=https://api.openai.com/v1
+```
 
 ### Other Platforms
 - Netlify: Similar process to Vercel
@@ -193,13 +225,30 @@ src/
 
 ## 🔐 Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXT_PUBLIC_AI_API_KEY` | Yes | OpenAI API key for AI features |
-| `NEXT_PUBLIC_AI_API_BASE` | No | OpenAI API base URL (defaults to official) |
-| `NEXT_PUBLIC_NUTRITION_API_KEY` | No | Edamam API key for nutrition data |
-| `NEXT_PUBLIC_NUTRITION_API_ID` | No | Edamam App ID |
-| `NEXT_PUBLIC_VISION_API_KEY` | No | Vision API for image food recognition |
+### Required Variables
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key for AI features (get from [OpenAI Platform](https://platform.openai.com/api-keys)) |
+
+### Optional Variables
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_BASE_URL` | Custom OpenAI API base URL (defaults to `https://api.openai.com/v1`) |
+
+### Legacy Variables (Deprecated)
+
+The following variables are no longer used and can be removed from your environment files:
+- `NEXT_PUBLIC_AI_API_KEY` (replaced by `OPENAI_API_KEY`)
+- `NEXT_PUBLIC_AI_API_BASE` (replaced by `OPENAI_API_BASE_URL`)
+
+### Security Best Practices
+
+- **Never** commit `.env` or any file containing real API keys to version control
+- Use different API keys for development and production environments
+- Regularly rotate your API keys for security
+- The application validates API key configuration on startup and provides clear error messages
 
 ## 📱 Features in Detail
 

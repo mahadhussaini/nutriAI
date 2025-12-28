@@ -1,17 +1,48 @@
+import OpenAI from 'openai'
 import type { UserProfile, Recipe, MealPlan, DietaryPreference, HealthGoal } from '@/types'
+import { config, isOpenAIConfigured, getSafeApiKeyDisplay } from './config'
 
-// AI API configuration
-const AI_API_BASE = process.env.NEXT_PUBLIC_AI_API_BASE || 'https://api.openai.com/v1'
-const AI_API_KEY = process.env.NEXT_PUBLIC_AI_API_KEY || ''
+// OpenAI client instance
+let openaiClient: OpenAI | null = null
+
+/**
+ * Initialize OpenAI client with validated configuration
+ * Throws an error if configuration is invalid
+ */
+function initializeOpenAIClient(): OpenAI {
+  if (!isOpenAIConfigured()) {
+    throw new Error(
+      'OpenAI API key is not configured. Please set the OPENAI_API_KEY environment variable.\n' +
+      'See README.md for setup instructions.'
+    )
+  }
+
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: config.openai.apiKey,
+      baseURL: config.openai.baseURL,
+      dangerouslyAllowBrowser: false, // Ensure we never run in browser
+    })
+
+    if (config.isDevelopment) {
+      console.log(`OpenAI client initialized with key: ${getSafeApiKeyDisplay()}`)
+    }
+  }
+
+  return openaiClient
+}
 
 // AI Service class for handling all AI-related operations
 export class AIService {
-  private apiKey: string
-  private baseUrl: string
+  private client: OpenAI
 
-  constructor(apiKey: string = AI_API_KEY, baseUrl: string = AI_API_BASE) {
-    this.apiKey = apiKey
-    this.baseUrl = baseUrl
+  constructor() {
+    try {
+      this.client = initializeOpenAIClient()
+    } catch (error) {
+      console.error('Failed to initialize AI service:', error)
+      throw error
+    }
   }
 
   // Generate personalized meal plan
@@ -22,38 +53,44 @@ export class AIService {
   ): Promise<MealPlan> {
     try {
       const prompt = this.buildMealPlanPrompt(userProfile, days, preferences)
-      
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a professional nutritionist and meal planning expert. Generate detailed, healthy meal plans with accurate nutritional information.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 2000
-        })
+
+      const completion = await this.client.chat.completions.create({
+        model: 'gpt-4.1-nano',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional nutritionist and meal planning expert. Generate detailed, healthy meal plans with accurate nutritional information. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        response_format: { type: 'json_object' }
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to generate meal plan')
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('No response content received from OpenAI')
       }
 
-      const data = await response.json()
-      return this.parseMealPlanResponse(data.choices[0].message.content, userProfile)
+      return this.parseMealPlanResponse(content, userProfile)
     } catch (error) {
       console.error('Error generating meal plan:', error)
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          console.error('OpenAI API key configuration error')
+        } else if (error.message.includes('rate limit')) {
+          console.error('OpenAI API rate limit exceeded')
+        } else if (error.message.includes('insufficient_quota')) {
+          console.error('OpenAI API quota exceeded')
+        }
+      }
+
       // Return fallback meal plan
       return this.getFallbackMealPlan(userProfile)
     }
@@ -67,38 +104,44 @@ export class AIService {
   ): Promise<Recipe> {
     try {
       const prompt = this.buildRecipePrompt(ingredients, dietaryPreferences, servings)
-      
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a creative chef and nutritionist. Create healthy, delicious recipes using available ingredients with accurate nutritional information and clear instructions.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.8,
-          max_tokens: 1500
-        })
+
+      const completion = await this.client.chat.completions.create({
+        model: 'gpt-4.1-nano',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a creative chef and nutritionist. Create healthy, delicious recipes using available ingredients with accurate nutritional information and clear instructions. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.8,
+        max_tokens: 1500,
+        response_format: { type: 'json_object' }
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to generate recipe')
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('No response content received from OpenAI')
       }
 
-      const data = await response.json()
-      return this.parseRecipeResponse(data.choices[0].message.content, ingredients)
+      return this.parseRecipeResponse(content, ingredients)
     } catch (error) {
       console.error('Error generating recipe:', error)
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          throw new Error('OpenAI API key is not configured. Please check your environment variables.')
+        } else if (error.message.includes('rate limit')) {
+          throw new Error('OpenAI API rate limit exceeded. Please try again later.')
+        } else if (error.message.includes('insufficient_quota')) {
+          throw new Error('OpenAI API quota exceeded. Please check your billing settings.')
+        }
+      }
+
       throw error
     }
   }
@@ -111,39 +154,46 @@ export class AIService {
   ): Promise<string> {
     try {
       const systemPrompt = this.buildChatSystemPrompt(userProfile)
-      
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
+
+      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        {
+          role: 'system',
+          content: systemPrompt
         },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt
-            },
-            ...(context?.map(msg => ({ role: 'assistant', content: msg })) || []),
-            {
-              role: 'user',
-              content: message
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 800
-        })
+        ...(context?.map(msg => ({ role: 'assistant' as const, content: msg })) || []),
+        {
+          role: 'user',
+          content: message
+        }
+      ]
+
+      const completion = await this.client.chat.completions.create({
+        model: 'gpt-4.1-nano',
+        messages,
+        temperature: 0.7,
+        max_tokens: 800
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to get chat response')
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('No response content received from OpenAI')
       }
 
-      const data = await response.json()
-      return data.choices[0].message.content
+      return content
     } catch (error) {
       console.error('Error getting chat response:', error)
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          return "I'm having trouble connecting to my knowledge base. Please check the application configuration."
+        } else if (error.message.includes('rate limit')) {
+          return "I'm receiving too many requests right now. Please try again in a moment."
+        } else if (error.message.includes('insufficient_quota')) {
+          return "I'm temporarily unavailable due to service limits. Please try again later."
+        }
+      }
+
       return "I'm sorry, I'm having trouble connecting right now. Please try again later."
     }
   }
@@ -161,42 +211,46 @@ export class AIService {
     servingSize: string
   }> {
     try {
-      const prompt = isImageDescription 
+      const prompt = isImageDescription
         ? `Analyze this food image description and provide nutritional information: "${input}"`
         : `Analyze this food item and provide nutritional information: "${input}"`
 
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a nutrition expert. Analyze food items and provide accurate nutritional information. Return data in JSON format.'
-            },
-            {
-              role: 'user',
-              content: `${prompt}\n\nReturn as JSON: { "foodName": "", "estimatedCalories": 0, "nutrition": {"protein": 0, "carbs": 0, "fat": 0, "fiber": 0}, "servingSize": "" }`
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 300
-        })
+      const completion = await this.client.chat.completions.create({
+        model: 'gpt-4.1-nano',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a nutrition expert. Analyze food items and provide accurate nutritional information. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: `${prompt}\n\nReturn as JSON: { "foodName": "", "estimatedCalories": 0, "nutrition": {"protein": 0, "carbs": 0, "fat": 0, "fiber": 0}, "servingSize": "" }`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+        response_format: { type: 'json_object' }
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to analyze food')
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('No response content received from OpenAI')
       }
 
-      const data = await response.json()
-      const result = JSON.parse(data.choices[0].message.content)
+      const result = JSON.parse(content)
       return result
     } catch (error) {
       console.error('Error analyzing food:', error)
+
+      // Provide more specific error messages in logs
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          console.error('OpenAI API key configuration error during food analysis')
+        } else if (error.message.includes('JSON')) {
+          console.error('Invalid JSON response from OpenAI during food analysis')
+        }
+      }
+
       // Return default values
       return {
         foodName: input,
@@ -345,8 +399,85 @@ export class AIService {
   }
 }
 
-// Export singleton instance
-export const aiService = new AIService()
+// Export singleton instance with lazy initialization and error handling
+let aiServiceInstance: AIService | null = null
+let initializationError: Error | null = null
+
+/**
+ * Get the AI service instance with lazy initialization
+ * Throws an error if the service cannot be initialized
+ */
+export function getAIService(): AIService {
+  if (initializationError) {
+    throw initializationError
+  }
+
+  if (!aiServiceInstance) {
+    try {
+      aiServiceInstance = new AIService()
+    } catch (error) {
+      initializationError = error instanceof Error ? error : new Error('Failed to initialize AI service')
+      throw initializationError
+    }
+  }
+
+  return aiServiceInstance
+}
+
+/**
+ * Check if the AI service is available and properly configured
+ */
+export function isAIServiceAvailable(): boolean {
+  try {
+    getAIService()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Get the AI service instance if available, or null if not configured
+ * This is a safe way to access the service without throwing errors
+ */
+export function getAIServiceSafe(): AIService | null {
+  try {
+    return getAIService()
+  } catch {
+    return null
+  }
+}
+
+// Create a lazy-initialized AI service instance (server-side only)
+export const aiService = {
+  async generateMealPlan(userProfile: UserProfile, days: number = 7, preferences?: string[]) {
+    if (typeof window !== 'undefined') {
+      throw new Error('AI service must be called from server-side API routes')
+    }
+    return getAIService().generateMealPlan(userProfile, days, preferences)
+  },
+
+  async generateRecipeFromIngredients(ingredients: string[], dietaryPreferences: DietaryPreference[] = [], servings: number = 4) {
+    if (typeof window !== 'undefined') {
+      throw new Error('AI service must be called from server-side API routes')
+    }
+    return getAIService().generateRecipeFromIngredients(ingredients, dietaryPreferences, servings)
+  },
+
+  async getChatResponse(message: string, userProfile?: UserProfile, context?: string[]) {
+    if (typeof window !== 'undefined') {
+      throw new Error('AI service must be called from server-side API routes')
+    }
+    return getAIService().getChatResponse(message, userProfile, context)
+  },
+
+  async analyzeFoodInput(input: string, isImageDescription: boolean = false) {
+    if (typeof window !== 'undefined') {
+      throw new Error('AI service must be called from server-side API routes')
+    }
+    return getAIService().analyzeFoodInput(input, isImageDescription)
+  }
+} as const
 
 // Utility functions
 export const calculateDailyCalories = (profile: UserProfile): number => {

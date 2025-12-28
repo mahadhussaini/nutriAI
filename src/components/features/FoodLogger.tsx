@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useUserStore } from '@/store/userStore'
 import { useMealStore } from '@/store/mealStore'
-import { aiService } from '@/lib/ai'
+// Removed direct AI service import - now using API routes
 import { generateId } from '@/lib/utils'
 import { Camera, Search, Plus, Loader2, X } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,7 +36,25 @@ export default function FoodLogger({ onClose }: FoodLoggerProps) {
 
     setIsAnalyzing(true)
     try {
-      const result = await aiService.analyzeFoodInput(foodInput, false)
+      // Call AI food analysis API route
+      const apiResponse = await fetch('/api/ai/analyze-food', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: foodInput,
+          isImageDescription: false,
+        }),
+      })
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json()
+        throw new Error(errorData.error || 'Failed to analyze food')
+      }
+
+      const data = await apiResponse.json()
+      const result = data.result
       setAnalyzedFood(result)
     } catch (error) {
       console.error('Error analyzing food:', error)
@@ -55,10 +73,29 @@ export default function FoodLogger({ onClose }: FoodLoggerProps) {
       // 1. Upload the image to a service
       // 2. Use AI vision to analyze the image
       // 3. Extract food information
-      
+
       // For now, we'll simulate with a placeholder
       const mockDescription = `Image of food: ${file.name}`
-      const result = await aiService.analyzeFoodInput(mockDescription, true)
+
+      // Call AI food analysis API route
+      const apiResponse = await fetch('/api/ai/analyze-food', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: mockDescription,
+          isImageDescription: true,
+        }),
+      })
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json()
+        throw new Error(errorData.error || 'Failed to analyze food image')
+      }
+
+      const data = await apiResponse.json()
+      const result = data.result
       setAnalyzedFood(result)
       setFoodInput(result.foodName)
     } catch (error) {

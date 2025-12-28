@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useUserStore } from '@/store/userStore'
-import { aiService } from '@/lib/ai'
+// Removed direct AI service import - now using API routes
 import { generateId } from '@/lib/utils'
 import { Send, Bot, User, Loader2, Lightbulb, Heart, Zap, Apple } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -77,7 +77,26 @@ export default function AICoach() {
         .filter(m => m.role === 'assistant')
         .map(m => m.content)
 
-      const response = await aiService.getChatResponse(messageText, profile || undefined, recentContext)
+      // Call AI chat API route
+      const apiResponse = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageText,
+          userProfile: profile || undefined,
+          context: recentContext,
+        }),
+      })
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json()
+        throw new Error(errorData.error || 'Failed to get AI response')
+      }
+
+      const data = await apiResponse.json()
+      const response = data.response
 
       const assistantMessage: ChatMessage = {
         id: generateId(),
